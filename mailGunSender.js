@@ -1,37 +1,12 @@
-const Mailgun = require('mailgun-js');
-const AWS = require('aws-sdk');
+'use strict';
 
-AWS.config.update({
-    "accessKeyId": process.env.KEY_ID,
-    "secretAccessKey": process.env.secretAccessKey,
-    "region": process.env.REGION
-});
+const Mailgun = require('mailgun-js');
 
 const api_key = process.env.API_KEY_MAIL_GUN;
 const domain = process.env.DOMAIN_MAIL_GUN;
 const from_who = process.env.EMAIL_FROM;
 
-const sqs = new AWS.SQS({
-    apiVersion: '2012-11-05'
-});
-
-const queueURL = process.env.URL_SQS;
-
-AWS.config.correctClockSkew = true;
-const params = {
-    AttributeNames: [
-        "SentTimestamp"
-    ],
-    MaxNumberOfMessages: 1,
-    MessageAttributeNames: [
-        "All"
-    ],
-    QueueUrl: queueURL,
-    VisibilityTimeout: 0,
-    WaitTimeSeconds: 0
-};
-
-function sendEmail(email, message, deleteParams) {
+function sendEmail(email, message) {
     const mailgun = new Mailgun({
         apiKey: api_key,
         domain: domain
@@ -39,29 +14,19 @@ function sendEmail(email, message, deleteParams) {
     const data = {
         from: from_who,
         to: email,
-        subject: 'Hello from Mailgun',
+        subject: `Hello from ${from_who}`,
         html: message
     }
     mailgun.messages().send(data, function (err, body) {
         if (err) {
             console.log("got an error: ", err);
         } else {
-            sqs.deleteMessage(deleteParams, function (err, data) {
-                if (err) {
-                    console.log("Delete Error", err);
-                } else {
-                    console.log("Message Deleted", data);
-                }
-            });
-            console.log('email success sent :');
-
+            console.log('email success sent :', body);
         }
     });
 }
 
-
 exports.sendMailGun = (event, context, callback) => {
-    console.log('context :', context);
     const response = {
         statusCode: 200,
         body: JSON.stringify({
@@ -69,26 +34,7 @@ exports.sendMailGun = (event, context, callback) => {
             input: event,
         }),
     };
-
-    console.log('event: ', JSON.stringify(event));
-    sqs.receiveMessage(params, function (err, data) {
-        if (err) {
-            console.log("Receive Error", err);
-        } else {
-            console.log("!! data", data);
-            if (data.Messages) {
-
-                const deleteParams = {
-                    QueueUrl: queueURL,
-                    ReceiptHandle: data.Messages[0].ReceiptHandle
-                };
-                sendEmail(process.env.EMAIL_TO, data.Messages[0].Body, deleteParams);
-
-            } else {
-                console.log('sqs stack is empty! :');
-            }
-        }
-    });
-
+    const messageToEmail = event.Records[0].body;
+    sendEmail(process.env.EMAIL_TO, messageToEmail);
     callback(null, response);
 };
