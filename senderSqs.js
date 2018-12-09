@@ -8,7 +8,6 @@ AWS.config.update(
     "secretAccessKey": process.env.secretAccessKey, 
     "region": process.env.REGION
 });
-
 AWS.config.correctClockSkew = true;
 
 const sqs = new AWS.SQS({
